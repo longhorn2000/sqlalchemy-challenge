@@ -11,111 +11,126 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 4,
+   "execution_count": 27,
    "metadata": {},
    "outputs": [],
    "source": [
-    "#import dependencies\n",
-    "import numpy as np\n",
-    "import sqlalchemy\n",
-    "from sqlalchemy.ext.automap import automap_base\n",
-    "from sqlalchemy.orm import Session\n",
-    "from sqlalchemy import create_engine, func\n",
-    "\n",
+    "# Import Dependenices \n",
     "from flask import Flask, jsonify\n",
-    "\n",
-    "import datetime"
+    "import numpy as np\n",
+    "from sqlalchemy import create_engine\n",
+    "from sqlalchemy.orm import Session\n",
+    "from sqlalchemy import and_\n",
+    "from sqlalchemy import or_\n",
+    "from sqlalchemy.ext.automap import automap_base\n",
+    "from sqlalchemy import func\n",
+    "import datetime as dt\n",
+    "from dateutil.relativedelta import relativedelta\n",
+    "import pandas as pd"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 5,
+   "execution_count": 28,
    "metadata": {},
    "outputs": [],
    "source": [
-    "#Setup database\n",
-    "#create engine\n",
-    "engine = create_engine(\"sqlite:///Resources/hawaii.sqlite\")\n",
-    "\n",
-    "#reflect database and tables\n",
+    "#Create engine\n",
+    "engine = create_engine(\"sqlite:///Resources/hawaii.sqlite\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# reflect an existing database into a new model\n",
     "Base = automap_base()\n",
-    "Base.prepare(engine, reflect = True)"
+    "# reflect the tables\n",
+    "Base.prepare(engine, reflect=True)"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 6,
+   "execution_count": 30,
    "metadata": {},
    "outputs": [],
    "source": [
-    "#save table references\n",
     "Measurement = Base.classes.measurement\n",
-    "Station = Base.classes.station\n",
-    "\n",
-    "#create session\n",
-    "session = Session(engine)\n",
-    "\n",
-    "#Setup Flask\n",
+    "Station = Base.classes.station"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Create our session (link) from Python to the DB\n",
+    "session = Session(engine)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 32,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Create an app\n",
     "app = Flask(__name__)"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 12,
+   "execution_count": 33,
    "metadata": {},
    "outputs": [],
    "source": [
-    "#Create a function that gets minimum, average, and maximum temperatures for a range of dates\n",
-    "# This function called `calc_temps` will accept start date and end date in the format '%Y-%m-%d' \n",
-    "# and return the minimum, average, and maximum temperatures for that range of dates\n",
-    "def calc_temps(start_date, end_date):\n",
-    "    \"\"\"TMIN, TAVG, and TMAX for a list of dates.\n",
-    "    \n",
-    "    Args:\n",
-    "        start_date (string): A date string in the format %Y-%m-%d\n",
-    "        end_date (string): A date string in the format %Y-%m-%d\n",
-    "        \n",
-    "    Returns:\n",
-    "        TMIN, TAVE, and TMAX\n",
-    "    \"\"\"\n",
-    "    \n",
-    "    return session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\\\n",
-    "        filter(Measurement.date >= start_date).filter(Measurement.date <= end_date).all()"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 13,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "#Set Flask Routes\n",
-    "\n",
+    "# home page\n",
     "@app.route(\"/\")\n",
-    "def main():\n",
-    "    \"\"\"Lists all available routes.\"\"\"\n",
+    "def home():\n",
+    "    print(\"Server received request for 'Home' page...\")\n",
     "    return (\n",
     "        f\"Available Routes:<br/>\"\n",
-    "        f\"/api/v1.0/precipitation<br/>\"\n",
-    "        f\"/api/v1.0/stations<br/>\"\n",
-    "        f\"/api/v1.0/tobs<br/>\"\n",
-    "        f\"/api/v1.0/<start><br/>\"\n",
-    "        f\"/api/v1.0/<start>/<end>\"\n",
+    "        f\"/api/v1.0/precipitation<br>\"\n",
+    "        f\"/api/v1.0/stations<br>\"\n",
+    "        f\"/api/v1.0/tobs<br>\"\n",
+    "        f\"/api/v1.0/ + start date<br>\"\n",
+    "        f\"/api/v1.0/ + start date/ + end date\"\n",
     "    )"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 14,
+   "execution_count": 34,
    "metadata": {},
    "outputs": [],
    "source": [
     "@app.route(\"/api/v1.0/precipitation\")\n",
     "def precipitation():\n",
-    "    \"\"\"Return a JSON representation of a dictionary where the date is the key and the value is \n",
-    "    the precipitation value\"\"\"\n",
-    "\n",
-    "    print(\"Received precipitation api request.\")"
+    "    print(\"Server received request for 'precipitation' page...\")\n",
+    "    last_date = session.query(func.max(Measurement.date)).all()\n",
+    "    last_date = last_date[0][0]\n",
+    "    last_date = dt.datetime.strptime(last_date, '%Y-%m-%d').date()\n",
+    "    year_before_date = ((last_date - relativedelta(years = 1)).strftime('%Y-%m-%d'))\n",
+    "    query = session.query(Measurement.date, Measurement.prcp).filter(Measurement.date >= year_before_date).order_by(Measurement.date.desc()).all()\n",
+    "    data = {date: prcp for date, prcp in query}\n",
+    "    return jsonify(data)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 35,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "@app.route(\"/api/v1.0/stations\")\n",
+    "def stations():\n",
+    "    print(\"Server received request for 'stations' page...\")\n",
+    "    query = session.query(Station.station).all()\n",
+    "    stations = list(np.ravel(query))\n",
+    "    return jsonify(stations)"
    ]
   },
   {
